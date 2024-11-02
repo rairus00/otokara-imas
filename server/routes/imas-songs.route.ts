@@ -6,38 +6,56 @@ import { ILike, Like } from 'typeorm';
 const imasSongsRouter = Router();
 
 // Database接続を初期化
-import { KaraokeSongRepository, LiveEventRepository } from '../database';
+import {
+  KaraokeSongRepository,
+  LiveEventRepository,
+  SongRepository,
+} from '../database';
+import { Song } from 'server/entities/song.entity';
+
+/**
+ * GET /api/imasSongs/brandName/:brandName
+ * 指定されたブランド名から全ての楽曲を返すAPI
+ */
+imasSongsRouter.get('/brandName/:brandName', async (req, res) => {
+  const result = await SongRepository.find({
+    where: { brandName: req.params.brandName },
+    relations: ['karaokeSongsDam'],
+  });
+
+  res.send(result);
+});
 
 /**
  * GET /api/imasSongs/keyword/:keyword
  * 指定されたキーワードから楽曲を返すAPI
  */
 imasSongsRouter.get('/keyword/:keyword', async (req, res) => {
-  let result: KaraokeSong[] = [];
+  let result: Song[] = [];
 
   if (req.query['brandName']) {
     const brandName = req.query['brandName'].toString();
 
     // ブランド名で絞り込んだ検索結果を取得
-    result = await KaraokeSongRepository.find({
+    result = await SongRepository.find({
       where: [
-        { title: ILike(`%${req.params.keyword}%`), brand: brandName },
-        { titleYomi: Like(`%${req.params.keyword}%`), brand: brandName },
-        { artist: Like(`%${req.params.keyword}%`), brand: brandName },
-        { artistYomi: Like(`%${req.params.keyword}%`), brand: brandName },
+        { title: ILike(`%${req.params.keyword}%`), brandName: brandName },
+        { titleKana: Like(`%${req.params.keyword}%`), brandName: brandName },
+        { artist: Like(`%${req.params.keyword}%`), brandName: brandName },
+        // { artistYomi: Like(`%${req.params.keyword}%`), brandName: brandName },
       ],
-      order: { titleYomi: 'ASC' },
+      order: { titleKana: 'ASC' },
     });
   } else {
     // 検索結果を取得
-    result = await KaraokeSongRepository.find({
+    result = await SongRepository.find({
       where: [
         { title: ILike(`%${req.params.keyword}%`) },
-        { titleYomi: Like(`%${req.params.keyword}%`) },
+        { titleKana: Like(`%${req.params.keyword}%`) },
         { artist: Like(`%${req.params.keyword}%`) },
-        { artistYomi: Like(`%${req.params.keyword}%`) },
+        // { artistYomi: Like(`%${req.params.keyword}%`) },
       ],
-      order: { titleYomi: 'ASC' },
+      order: { titleKana: 'ASC' },
     });
   }
 
@@ -50,44 +68,31 @@ imasSongsRouter.get('/keyword/:keyword', async (req, res) => {
  * 指定された曲名から楽曲を返すAPI
  */
 imasSongsRouter.get('/songName/:songName', async (req, res) => {
-  let result: KaraokeSong[] = [];
+  let result: Song[] = [];
 
   if (req.query['brandName']) {
     const brandName = req.query['brandName'].toString();
 
     // ブランド名で絞り込んだ検索結果を取得
-    result = await KaraokeSongRepository.find({
+    result = await SongRepository.find({
       where: [
-        { title: ILike(`%${req.params.songName}%`), brand: brandName },
-        { titleYomi: Like(`%${req.params.songName}%`), brand: brandName },
+        { title: ILike(`%${req.params.songName}%`), brandName: brandName },
+        { titleKana: Like(`%${req.params.songName}%`), brandName: brandName },
       ],
-      order: { titleYomi: 'ASC' },
+      order: { titleKana: 'ASC' },
     });
   } else {
     // 検索結果を取得
-    result = await KaraokeSongRepository.find({
+    result = await SongRepository.find({
       where: [
         { title: ILike(`%${req.params.songName}%`) },
-        { titleYomi: Like(`%${req.params.songName}%`) },
+        { titleKana: Like(`%${req.params.songName}%`) },
       ],
-      order: { titleYomi: 'ASC' },
+      order: { titleKana: 'ASC' },
     });
   }
 
   // 検索結果をクライアントに返す
-  res.send(result);
-});
-
-/**
- * GET /api/imasSongs/ranking/:brandName
- * 指定されたブランド名から人気順に楽曲を返すAPI
- */
-imasSongsRouter.get('/ranking/:brandName', async (req, res) => {
-  const result = await KaraokeSongRepository.find({
-    where: { brand: req.params.brandName },
-    order: { damRank: 'asc' },
-  });
-
   res.send(result);
 });
 

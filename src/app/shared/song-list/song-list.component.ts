@@ -101,26 +101,29 @@ export class SongListComponent implements OnInit, OnChanges {
     // 配信が新しい順にソート
     if (this.sortType && this.sortType == 'newer') {
       this.songs.sort((a: any, b: any) => {
-        if (!a.damReleaseDate) return -1;
-        if (!b.damReleaseDate) return 1;
+        if (!a.dateOfFirstKaraokeRelease) return -1;
+        if (!b.dateOfFirstKaraokeRelease) return 1;
         if (
-          new Date(b.damReleaseDate).getTime() <
-          new Date(a.damReleaseDate).getTime()
+          new Date(b.dateOfFirstKaraokeRelease).getTime() <
+          new Date(a.dateOfFirstKaraokeRelease).getTime()
         )
           return -1;
         if (
-          new Date(b.damReleaseDate).getTime() >
-          new Date(a.damReleaseDate).getTime()
+          new Date(b.dateOfFirstKaraokeRelease).getTime() >
+          new Date(a.dateOfFirstKaraokeRelease).getTime()
         )
           return 1;
         return 0;
       });
+
+      // リリース日のない楽曲を除外
+      this.songs = this.songs.filter((song) => song.dateOfFirstKaraokeRelease);
     }
 
     // 50音順にソート
     if (this.sortType && this.sortType == 'alphabetical') {
       this.songs.sort((a: any, b: any) =>
-        a.titleYomi.localeCompare(b.titleYomi, 'ja')
+        a.titleKana.localeCompare(b.titleKana, 'ja')
       );
     }
   }

@@ -55,20 +55,6 @@
   [selectedIndex]="this.tabIndex"
   *ngIf="this.brandName != 'all'"
 >
-  <!-- 人気順の楽曲リスト -->
-  <mat-tab>
-    <ng-template mat-tab-label>
-      <mat-icon>show_chart</mat-icon>
-    </ng-template>
-
-    <!-- 検索結果 (SongListComponent) -->
-    <app-song-list
-      searchType="all"
-      [searchParams]="{ brandName: this.brandName }"
-      [sortType]="undefined"
-    ></app-song-list>
-  </mat-tab>
-
   <!-- 新着順の楽曲リスト -->
   <mat-tab>
     <ng-template mat-tab-label>

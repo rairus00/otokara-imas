@@ -1,7 +1,49 @@
 import fetch from 'node-fetch';
 
 const FUJIWARA_HAJIME_API_ENDPOINT = 'https://api.fujiwarahaji.me/v3/';
-const MAX_GET_SONG_LIST_NUM = 1;
+
+export interface FujiwarahajimeSongDetail {
+  // タイトル
+  name: string;
+  // カナ
+  kana: string;
+  // タイプ
+  type: 'music';
+  // 楽曲ID
+  song_id: number;
+  // リンクURL
+  link: string;
+  // API URL
+  api: string;
+  // ブランド
+  music_type: string;
+  // 作詞者
+  lyrics: any[];
+  // 作曲者
+  composer: any[];
+  // 編曲者
+  arrange: any[];
+  // 歌詞URL
+  lyrics_link: string | null;
+  // 収録ディスク
+  disc: any[];
+  // メンバー情報
+  member:
+    | {
+        name: string;
+        type: string;
+        tax_id: number;
+        link: string;
+        api: string;
+        production: string;
+        cv: string;
+      }[]
+    | undefined;
+  // ライブ情報
+  live: any[] | null;
+  // その他
+  digital: boolean;
+}
 
 export interface LiveEventDetailResponse {
   name: string;
@@ -65,8 +107,8 @@ export class FujiwarahajimeClient {
    * 楽曲IDの一覧を取得
    * @returns 楽曲ID一覧の配列
    */
-  static async getSongIdList() {
-    const requestUrl = `${FUJIWARA_HAJIME_API_ENDPOINT}/list?type=music`;
+  static async getSongIds() {
+    const requestUrl = `${FUJIWARA_HAJIME_API_ENDPOINT}/list?type=music&order=asc`;
     const apiResponse = await fetch(requestUrl);
 
     if (apiResponse.status != 200) {
@@ -76,36 +118,24 @@ export class FujiwarahajimeClient {
 
     // 検索結果を取得
     const songs = await apiResponse.json();
-    let songIdList: number[] = [];
+    let songIds: number[] = [];
 
-    let counter = 0;
     for (let song of songs) {
-      if (counter >= MAX_GET_SONG_LIST_NUM) {
-        break;
-      }
-
-      songIdList.push(song.song_id);
-      counter++;
+      songIds.push(song.song_id);
     }
 
-    return songIdList;
+    return songIds;
   }
 
-  static async getSongDetailList(songIds: number[]) {
-    const songDetailList = [];
+  static async getSongDetails(songIds: number[]) {
+    const songDetails = [];
 
-    let counter = 0;
     for (let songId of songIds) {
-      if (counter >= MAX_GET_SONG_LIST_NUM) {
-        break;
-      }
-
       const songDetail = await this.getSongDetail(songId);
-      songDetailList.push(songDetail);
-      counter++;
+      songDetails.push(songDetail);
     }
 
-    return songDetailList;
+    return songDetails;
   }
 
   /**
@@ -113,7 +143,9 @@ export class FujiwarahajimeClient {
    * @param songId 楽曲ID
    * @returns 楽曲詳細情報
    */
-  static async getSongDetail(songId: number) {
+  static async getSongDetail(
+    songId: number
+  ): Promise<FujiwarahajimeSongDetail> {
     const requestUrl = `${FUJIWARA_HAJIME_API_ENDPOINT}/music?id=${songId}`;
     const apiResponse = await fetch(requestUrl);
 

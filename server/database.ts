@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { Song } from './entities/song.entity';
 import { KaraokeSong } from './entities/karaoke-song.entity';
+import { KaraokeSongDam } from './entities/karaoke-song-dam.entity';
 import { LiveEvent } from './entities/live-event.entity';
 
 // 環境変数 DATABASE_URL の読み込み
@@ -15,7 +16,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: databaseUrl,
   logging: !process.env['NODE_ENV'] || process.env['NODE_ENV'] != 'production',
-  entities: [Song, KaraokeSong, LiveEvent],
+  entities: [Song, KaraokeSong, KaraokeSongDam, LiveEvent],
   synchronize: true,
   ssl: isLocalHost
     ? undefined
@@ -27,4 +28,6 @@ export const AppDataSource = new DataSource({
 // 各エンティティをリポジトリとして取得してエクスポート
 export const SongRepository = AppDataSource.getRepository(Song);
 export const KaraokeSongRepository = AppDataSource.getRepository(KaraokeSong);
+export const KaraokeSongDamRepository =
+  AppDataSource.getRepository(KaraokeSongDam);
 export const LiveEventRepository = AppDataSource.getRepository(LiveEvent);

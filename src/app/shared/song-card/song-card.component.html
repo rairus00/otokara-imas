@@ -1,13 +1,6 @@
 <mat-card class="song-card">
   <mat-card-title>
-    <a
-      href="https://www.clubdam.com/karaokesearch/songleaf.html?requestNo={{
-        song.damRequestNo
-      }}"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="song-title"
-    >
+    <a class="song-title">
       {{ song.title }}
     </a>
   </mat-card-title>
@@ -15,10 +8,49 @@
   <mat-card-subtitle>
     {{ song.artist }}
     <br />
-    DAM:&nbsp;{{ song.damRequestNo }}
+    DAM:&nbsp;
+
+    <!-- DAMのリクエスト番号がなければ -->
+    <ng-container *ngIf="song.karaokeSongsDam.length == 0"> - </ng-container>
+
+    <!-- DAMのリクエスト番号が一つしかなければ -->
+    <ng-container *ngIf="song.karaokeSongsDam.length == 1">
+      <a
+        href="https://www.clubdam.com/karaokesearch/songleaf.html?requestNo={{
+          song.karaokeSongsDam[0].damRequestNo
+        }}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {{ song.karaokeSongsDam[0].damRequestNo }}
+      </a>
+    </ng-container>
+
+    <!-- DAMのリクエスト番号が複数あれば -->
+    <ng-container *ngIf="song.karaokeSongsDam.length >= 2">
+      <ng-container
+        *ngFor="let damSong of song.karaokeSongsDam; let idx = index"
+      >
+        <ng-container *ngIf="idx != 0"> / </ng-container>
+
+        <a
+          href="https://www.clubdam.com/karaokesearch/songleaf.html?requestNo={{
+            damSong.damRequestNo
+          }}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ this.getSongVersionTitle(damSong.title) }}
+          ({{ damSong.damRequestNo }})
+        </a>
+      </ng-container>
+    </ng-container>
+    <!---->
   </mat-card-subtitle>
 
   <mat-card-actions align="end">
+    <!-- 複数のリクエスト番号を扱えるようになったため一旦コメントアウト -->
+    <!--
     <a
       [href]="this.getReserveIntentUrl()"
       target="_blank"
@@ -27,6 +59,8 @@
     >
       予約
     </a>
+    -->
+
     <!-- 機能未実装のためコメントアウト -->
     <!-- <button mat-button>お気に入り</button> -->
   </mat-card-actions>

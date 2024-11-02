@@ -61,13 +61,13 @@ export class SongsService {
   }
 
   /**
-   * 指定されたブランド名で人気順に楽曲を取得
+   * 指定されたブランド名で全ての楽曲を取得
    * @param brandName ブランド名
    * @returns 楽曲の配列
    */
   async getSongsByBrandName(brandName: string) {
     // バックエンドに対してリクエストを送信
-    const apiResponse = await fetch(`/api/imasSongs/ranking/${brandName}`);
+    const apiResponse = await fetch(`/api/imasSongs/brandName/${brandName}`);
 
     // リクエストに失敗した場合、エラーをスロー
     if (!apiResponse.ok) {

@@ -45,4 +45,17 @@ export class SongCardComponent implements OnInit {
     // 信頼のできるURLとしてマークして返す
     return this.sanitizer.bypassSecurityTrustUrl(url);
   }
+
+  public getSongVersionTitle(songTitle: string) {
+    return (
+      songTitle
+        // タイトルから楽曲名を削除
+        .replace(this.song.title, '')
+        // 前後の空白を削除
+        .trim()
+        // 先頭や末尾の括弧を削除
+        .replace(/^\(/, '')
+        .replace(/\)$/, '')
+    );
+  }
 }
