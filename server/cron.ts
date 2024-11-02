@@ -11,6 +11,7 @@ import {
   AppDataSource,
   KaraokeSongRepository,
   LiveEventRepository,
+  SongRepository,
 } from './database';
 
 import fetch from 'node-fetch';
@@ -21,51 +22,49 @@ class Cron {
     // データベースの接続完了まで待機
     await AppDataSource.initialize();
 
-    // DAMから楽曲を取得しDBに保存
-    await this.crawlSongs('cg', 'アイドルマスターシンデレラガールズ');
-    await this.crawlSongs('sc', 'アイドルマスターシャイニーカラーズ');
-    await this.crawlSongs('765', 'アイドルマスターミリオンライブ');
+    // 楽曲の一覧をふじわらはじめから取得しDBに保存
+    await this.crawlSongs();
+
+    // TODO: DAM・JOYSOUNDからそれぞれカラオケ配信情報を取得し、DBに保存
 
     // ふじわらはじめからライブイベントを取得しDBに保存
-    await this.crawlLiveEvents();
+    // await this.crawlLiveEvents();
 
     // ライブイベントと楽曲をマッチング
-    await this.matchSongOfLiveEvents();
+    // await this.matchSongOfLiveEvents();
+  }
+
+  static async crawlSongs() {
+    // 楽曲情報を取得
+    const songIdList = await FujiwarahajimeClient.getSongIdList();
+    const songList = await FujiwarahajimeClient.getSongDetailList(songIdList);
+
+    // 楽曲情報をDBに保存
+    this.storeSongList(songList);
   }
 
   /**
-   * 指定されたキーワードに当てはまる楽曲を取得しDBに保存
-   * @param brand ブランド名
-   * @param keyword キーワード
+   * 楽曲情報のリストをDBに保存
+   * @param songList 楽曲リスト
    */
-  static async crawlSongs(brand: string, keyword: string) {
-    // 楽曲情報を取得
-    const songs = await Cron.getSongsByKeyword(keyword);
+  static async storeSongList(songList: any) {
+    for (let song of songList) {
+      let memberList = song.member.map(
+        (member: { name: string }) => member.name
+      );
+      let replacedMemberList: string = memberList.join(',');
 
-    // 人気順位を初期化
-    let rankCount: number = 1;
-
-    // 楽曲情報をDBに保存
-    for (let song of songs) {
-      await KaraokeSongRepository.save({
-        title: song.title,
-        titleYomi: song.titleYomi,
-        artist: song.artist,
-        artistYomi: song.artistYomi,
-        damArtistCode: song.artistCode,
-        damPlaybackTime: song.playbackTime,
-        damReleaseDate: song.releaseDate,
-        damRequestNo: song.requestNo,
-        damRank: rankCount,
-        brand: brand,
+      await SongRepository.save({
+        id: song.song_id,
+        title: song.name,
+        titleKana: song.kana,
+        artist: replacedMemberList,
+        brandName: song.music_type,
       });
 
-      console.log(`${song.title}を保存しました。`);
-
-      rankCount++;
+      console.log(`${song.name}を保存しました。`);
     }
-
-    console.log(`${songs.length}件の楽曲を保存しました。`);
+    console.log(`${songList.length}件の楽曲を保存しました。`);
   }
 
   /**

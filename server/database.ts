@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { Song } from './entities/song.entity';
 import { KaraokeSong } from './entities/karaoke-song.entity';
 import { LiveEvent } from './entities/live-event.entity';
 
@@ -14,7 +15,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: databaseUrl,
   logging: !process.env['NODE_ENV'] || process.env['NODE_ENV'] != 'production',
-  entities: [KaraokeSong, LiveEvent],
+  entities: [Song, KaraokeSong, LiveEvent],
   synchronize: true,
   ssl: isLocalHost
     ? undefined
@@ -24,5 +25,6 @@ export const AppDataSource = new DataSource({
 });
 
 // 各エンティティをリポジトリとして取得してエクスポート
+export const SongRepository = AppDataSource.getRepository(Song);
 export const KaraokeSongRepository = AppDataSource.getRepository(KaraokeSong);
 export const LiveEventRepository = AppDataSource.getRepository(LiveEvent);
