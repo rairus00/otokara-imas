@@ -19,6 +19,7 @@ import {
 } from './database';
 import { Like } from 'typeorm';
 import { DamClient, DamKaraokeSong } from './dam-client';
+import { Song } from './entities/song.entity';
 
 class Cron {
   static async execute() {
@@ -38,6 +39,9 @@ class Cron {
     // await this.matchSongOfLiveEvents();
   }
 
+  /**
+   * 楽曲の一覧をふじわらはじめから取得しDBに保存
+   */
   static async crawlSongs() {
     // ふじわらはじめAPIから全ての楽曲IDを取得
     let songIds = await FujiwarahajimeClient.getSongIds();
@@ -58,7 +62,7 @@ class Cron {
     }
 
     // ふじわらはじめAPI から一度に取得する上限数を10件とする
-    const MAX_NUM_OF_CRAWL_SONGS = 10; // TODO: 要調整
+    const MAX_NUM_OF_CRAWL_SONGS = 3; // TODO: 要調整
     songIds = songIds.slice(0, MAX_NUM_OF_CRAWL_SONGS);
 
     // 未保存の楽曲情報を取得
@@ -75,6 +79,7 @@ class Cron {
   static async storeSongs(songs: FujiwarahajimeSongDetail[]) {
     for (let song of songs) {
       console.log(`楽曲を保存`, song);
+      // 楽曲メンバーの配列から、各メンバーの名前をカンマ区切りで文字列に変換
       let memberNames = song.member
         ?.map((member: { name: string }) => member.name)
         .join(',');
@@ -101,107 +106,51 @@ class Cron {
    * DAMからカラオケ楽曲情報を取得しDBに保存
    */
   static async crawlDamKaraokeSongs() {
+    const MAX_NUM_OF_UPDATE_SONGS = 3; // TODO: 要調整
+    let firstReleaseDate: Date | undefined = undefined;
+    const todayDateTime = new Date().toISOString();
+
     // 最近取得していない楽曲のリストを取得
-    const MAX_NUM_OF_UPDATE_SONGS = 10; // TODO: 要調整
-    let songs = await SongRepository.find({
-      order: {
-        dateOfCrawlDam: 'ASC',
-      },
-      take: MAX_NUM_OF_UPDATE_SONGS,
-    });
+    let songs = await Cron.getSongsOfRecentlyNotGet(MAX_NUM_OF_UPDATE_SONGS);
 
     // 楽曲を反復
     for (const song of songs) {
-      console.log(`DAMからカラオケ楽曲を検索: ${song.title}`);
+      const imasKaraokeSongs: DamKaraokeSong[] = [];
+      // DAMからのカラオケ楽曲の取得日時を更新
+      song.dateOfCrawlDam = todayDateTime;
 
-      // DAMで同じタイトルのカラオケ楽曲を検索
+      // DAMから同じタイトルのカラオケ楽曲を取得
+      console.log(`DAMからカラオケ楽曲を検索: ${song.title}`);
       const karaokeSongs = await DamClient.getKaraokeSongsByTitle(song.title);
 
       // カラオケ楽曲を反復
-      const imasKaraokeSongs: DamKaraokeSong[] = [];
       for (const karaokeSong of karaokeSongs) {
-        // アイマス楽曲判定 - アーティストにアイドルが一人でも含まれているか
-        const idolNames = song.artist?.split(',');
-        let isImasSong = idolNames?.some((idolName) =>
-          karaokeSong.artist.match(idolName)
-        );
-
-        // アイマス楽曲判定 - タイトルに (M@STER VERSION) が含まれているか
-        if (karaokeSong.title === `${song.title}(M@STER VERSION)`) {
-          isImasSong = true;
-        }
-
-        // アイマス楽曲判定 - アーティストにブランド名が含まれているか
-        let imasArtistNames: string[] = [];
-        switch (song.brandName) {
-          case '765':
-            imasArtistNames = ['765 MILLION ALLSTARS'];
-            break;
-          case 'sc':
-            imasArtistNames = [
-              'シャイニーカラーズ',
-              'イルミネーションスターズ',
-              'アンティーカ',
-              '放課後クライマックスガールズ',
-              'アルストロメリア',
-              'ストレイライト',
-              'ノクチル',
-              'シーズ',
-              'コメティック',
-            ];
-            break;
-        }
-
-        if (
-          imasArtistNames.length !== 0 &&
-          karaokeSong.artist &&
-          imasArtistNames.some(
-            (imasArtistName) => karaokeSong.artist.trim() == imasArtistName
-          )
-        ) {
-          isImasSong = true;
-        }
-
         // アイマス楽曲でないならスキップ
-        if (!isImasSong) {
+        if (!Cron.isImasSong(song, karaokeSong)) {
           console.log(`🚫  ${karaokeSong.title}`);
           continue;
         }
-
-        // カラオケ楽曲情報をDBに保存
-        console.log(`✅  ${karaokeSong.title}`);
-        await KaraokeSongDamRepository.save({
-          song: song, // Song と紐付け
-          title: karaokeSong.title,
-          damRequestNo: karaokeSong.requestNo,
-          damReleaseDate: karaokeSong.releaseDate,
-        });
-
-        // アイマス楽曲のみを配列へ追加
+        // カラオケ楽曲をアイマスカラオケ楽曲の配列へ追加
         imasKaraokeSongs.push(karaokeSong);
+        // カラオケ楽曲情報をDBに保存
+        Cron.storeKaraokeSong(song, karaokeSong);
+        console.log(`✅  ${karaokeSong.title}`);
       }
 
-      // DAMからのカラオケ楽曲の取得日時を更新
-      song.dateOfCrawlDam = new Date().toISOString();
-
-      // カラオケ楽曲のもっとも古いリリース日を取得
-      let firstReleaseDate: Date | undefined = undefined;
-      for (const karaokeSong of imasKaraokeSongs) {
-        const d = new Date(karaokeSong.releaseDate);
-        if (firstReleaseDate === undefined || d < firstReleaseDate) {
-          firstReleaseDate = d;
-        }
-      }
+      // アイマスカラオケ楽曲のもっとも古いリリース日を取得
+      firstReleaseDate = Cron.getOldestFirstReleaseDateByKaraokeSongs(
+        imasKaraokeSongs,
+        firstReleaseDate
+      );
 
       // 楽曲のリリース日を更新
       if (firstReleaseDate) {
-        if (!song.dateOfFirstKaraokeRelease) {
-          song.dateOfFirstKaraokeRelease = firstReleaseDate.toISOString();
-        } else {
-          const d = new Date(song.dateOfFirstKaraokeRelease);
-          if (firstReleaseDate < d) {
-            song.dateOfFirstKaraokeRelease = firstReleaseDate.toISOString();
-          }
+        const dateOfFirstKaraokeRelease = Cron.getFirstKaraokeReleaseDate(
+          song,
+          firstReleaseDate
+        );
+        if (dateOfFirstKaraokeRelease) {
+          song.dateOfFirstKaraokeRelease = dateOfFirstKaraokeRelease;
         }
         console.log(`DAMによるリリース日: ${firstReleaseDate}`);
       } else {
@@ -391,6 +340,167 @@ class Cron {
       liveEvent.numOfMatchedSongs = numOfMatchedSongs;
       await liveEvent.save();
     }
+  }
+
+  /**
+   * 最近、DAMから取得していない楽曲のリストを取得
+   * @param maxNumOfGetSongs 楽曲の最大取得数
+   * @returns
+   */
+  static async getSongsOfRecentlyNotGet(maxNumOfGetSongs: number) {
+    return await SongRepository.find({
+      order: {
+        dateOfCrawlDam: 'ASC',
+      },
+      take: maxNumOfGetSongs,
+    });
+  }
+
+  /**
+   * アイマス楽曲かどうかを判定
+   * @param song 楽曲
+   * @param karaokeSong カラオケ楽曲
+   * @returns
+   */
+  static isImasSong(song: Song, karaokeSong: DamKaraokeSong) {
+    return (
+      // アイドル名の存在チェック
+      Cron.containsIdolNameByKaraokeSongArtist(song, karaokeSong) ||
+      // アイマス楽曲特有タイトルの一致チェック
+      Cron.isImasSongTitleByKaraokeSongTitle(song, karaokeSong) ||
+      // アイマスユニット名の存在チェック
+      Cron.containsImasUnitNameByKaraokeSongArtist(song, karaokeSong)
+    );
+  }
+
+  /**
+   * カラオケ楽曲のアーティストにアイドル名が含まれているかを判定
+   * @param song 楽曲
+   * @param karaokeSong カラオケ楽曲
+   * @returns
+   */
+  static containsIdolNameByKaraokeSongArtist(
+    song: Song,
+    karaokeSong: DamKaraokeSong
+  ) {
+    if (typeof song.artist === 'undefined') {
+      return false;
+    }
+
+    // 楽曲のアーティスト名をカンマごとに配列に分割
+    const idolNames = song.artist.split(',');
+    // アイドル名の配列に、カラオケ楽曲のアーティスト名が含まれているかを判定
+    return idolNames.some((idolName) => karaokeSong.artist.match(idolName));
+  }
+
+  /**
+   * カラオケ楽曲のタイトルがアイマス楽曲特有のタイトルと一致するかを判定
+   * @param song
+   * @param karaokeSong
+   * @returns
+   */
+  static isImasSongTitleByKaraokeSongTitle(
+    song: Song,
+    karaokeSong: DamKaraokeSong
+  ) {
+    // カラオケ楽曲のタイトルが、楽曲タイトルに「(M@STER VERSION)」をつけたものと一致するか
+    return karaokeSong.title === `${song.title}(M@STER VERSION)`;
+  }
+
+  /**
+   * カラオケ楽曲のアーティストに、アイマスのユニット名が含まれているかを判定
+   * @param song
+   * @param karaokeSong
+   * @returns
+   */
+  static containsImasUnitNameByKaraokeSongArtist(
+    song: Song,
+    karaokeSong: DamKaraokeSong
+  ): boolean {
+    let imasUnitNames: string[] = [];
+    // 楽曲のブランド名によって、存在判定に使用するユニット名を設定
+    switch (song.brandName) {
+      case '765':
+        imasUnitNames = ['765 MILLION ALLSTARS'];
+        break;
+      case 'sc':
+        imasUnitNames = [
+          'シャイニーカラーズ',
+          'イルミネーションスターズ',
+          'アンティーカ',
+          '放課後クライマックスガールズ',
+          'アルストロメリア',
+          'ストレイライト',
+          'ノクチル',
+          'シーズ',
+          'コメティック',
+        ];
+        break;
+    }
+
+    return (
+      imasUnitNames.length !== 0 &&
+      karaokeSong.artist.length > 0 &&
+      imasUnitNames.some(
+        (imasUnitName) => karaokeSong.artist.trim() == imasUnitName
+      )
+    );
+  }
+
+  /**
+   * カラオケ楽曲をDBに保存
+   * @param song
+   * @param karaokeSong
+   */
+  static async storeKaraokeSong(song: Song, karaokeSong: DamKaraokeSong) {
+    // DAM楽曲をDBに保存
+    await KaraokeSongDamRepository.save({
+      song: song, // Song と紐付け
+      title: karaokeSong.title,
+      damRequestNo: karaokeSong.requestNo,
+      damReleaseDate: karaokeSong.releaseDate,
+    });
+  }
+
+  /**
+   * カラオケ楽曲の最も古いリリース日を返す
+   * @param karaokeSongs
+   * @param firstReleaseDate
+   * @returns
+   */
+  static getOldestFirstReleaseDateByKaraokeSongs(
+    karaokeSongs: DamKaraokeSong[],
+    firstReleaseDate: Date | undefined
+  ) {
+    for (const karaokeSong of karaokeSongs) {
+      const d = new Date(karaokeSong.releaseDate);
+
+      if (firstReleaseDate === undefined || d < firstReleaseDate) {
+        firstReleaseDate = d;
+      }
+    }
+
+    return firstReleaseDate;
+  }
+
+  /**
+   * カラオケ配信開始日を返す
+   * @param song 楽曲
+   * @param firstReleaseDate 配信開始日
+   * @returns
+   */
+  static getFirstKaraokeReleaseDate(song: Song, firstReleaseDate: Date) {
+    let dateOfFirstKaraokeRelease: string | null = null;
+
+    if (!song.dateOfFirstKaraokeRelease) {
+      dateOfFirstKaraokeRelease = firstReleaseDate.toISOString();
+    } else {
+      if (firstReleaseDate < new Date(song.dateOfFirstKaraokeRelease)) {
+        dateOfFirstKaraokeRelease = firstReleaseDate.toISOString();
+      }
+    }
+
+    return dateOfFirstKaraokeRelease;
   }
 }
 
